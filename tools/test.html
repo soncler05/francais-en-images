@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Vérifications automatiques</title>
+<style>
+  body { margin: 0; padding: 16px; font: 14px/1.6 "Segoe UI", Arial, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { border-bottom: 1px solid #ddd; padding: 5px 8px; text-align: left; }
+  .ok { color: #0a7d28; font-weight: bold; }
+  .ko { color: #c00; font-weight: bold; }
+  #summary { font-size: 17px; font-weight: bold; margin-bottom: 10px; }
+  /* l'iframe sert à piloter le lecteur : hors cadre, sinon elle recouvre le
+     tableau de résultats à l'écran */
+  iframe { position: fixed; left: -9999px; top: 0; width: 1100px; height: 700px; }
+</style>
+</head>
+<body>
+<h1>Vérifications automatiques — Le français en images</h1>
+<div id="summary">en cours…</div>
+<table><tbody id="rows"></tbody></table>
+
+<script>
+const rows = document.getElementById("rows");
+function log(name, pass, detail) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = '<td class="' + (pass ? "ok" : "ko") + '">' + (pass ? "OK  " : "ÉCHEC") +
+    "</td><td>" + name + "</td><td>" + (detail == null ? "" : detail) + "</td>";
+  rows.appendChild(tr);
+  return pass;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+(async () => {
+  let ok = 0, total = 0;
+  const check = (n, p, d) => { total++; if (log(n, p, d)) ok++; };
+
+  // charge l'application dans une iframe pour la piloter
+  const f = document.createElement("iframe");
+  f.width = 1100; f.height = 800; f.style.border = "1px solid #ccc";
+  f.src = "../index.html";
+  document.body.appendChild(f);
+  await new Promise(r => (f.onload = r));
+  const d = f.contentDocument, w = f.contentWindow;
+
+  // le nombre de pages est déduit du lecteur, pas recopié : le recopier
+  // justement était la source du décalage de la table de correspondance.
+  const PAGES = w.BOOK.pages.length;
+  const N = "(.*)\\s\\/\\s*" + PAGES;
+  const at = async i => { w.location.hash = "#" + i; await sleep(90); };
+  check("pages déclarées", PAGES === 45, PAGES + " pages");
+
+  // 1. toutes les pages s'affichent
+  const prev = d.getElementById("btnPrev"), next = d.getElementById("btnNext");
+  while (!prev.disabled) prev.click();
+  await at(1);
+  let allRendered = true, detail = [], missingImg = [];
+  for (let i = 1; i <= PAGES; i++) {
+    if (i > 1) next.click();
+    await sleep(70);
+    const sheet = d.querySelector(".sheet");
+    if (!sheet || !sheet.textContent.trim()) { allRendered = false; detail.push("p" + i); }
+    // aucune fiche ne doit rester sans média
+    const dead = Array.from(sheet.querySelectorAll(".vcard")).filter(
+      c => !c.querySelector("img, svg")).length;
+    if (dead) missingImg.push("p" + i + ":" + dead);
+  }
+  check("toutes les pages rendent du contenu", allRendered, detail.join(",") || "ok");
+  check("aucune fiche sans image", missingImg.length === 0, missingImg.join(" ") || "ok");
+
+  // 2. alphabet
+  const rowsAlpha = w.BOOK.alphabet;
+  check("26 lettres, 52 mots", rowsAlpha.length === 26 &&
+    rowsAlpha.reduce((n, g) => n + g.items.length, 0) === 52);
+
+  // 3. chaque carte a bien une image (ou un dessin)
+  await at(8);
+  const cards = Array.from(d.querySelectorAll(".card"));
+  const missing = cards.filter(c => !c.dataset.img && !c.querySelector("svg"));
+  check("28 cartes sur la page A–N", cards.length === 28, cards.length);
+  check("chaque carte a une image ou un dessin", missing.length === 0,
+    missing.length + " sans média");
+
+  // 4. visionneuse
+  const withImg = cards.find(c => c.dataset.img);
+  withImg.click(); await sleep(50);
+  const lb = d.getElementById("lightbox");
+  check("la visionneuse s'ouvre", lb.classList.contains("open"));
+  check("la visionneuse affiche le crédit",
+    !!lb.querySelector(".meta a") && /wikimedia/i.test(lb.querySelector(".meta a").href),
+    (lb.querySelector(".meta a") || {}).href);
+  lb.click(); await sleep(30);
+  check("la visionneuse se ferme", !lb.classList.contains("open"));
+
+  // 5. navigation au clavier
+  await at(8);
+  const ou = () => d.getElementById("where").textContent.trim();
+  const presse = async touche => {
+    d.dispatchEvent(new w.KeyboardEvent("keydown", { key: touche }));
+    await sleep(60);
+    return ou();
+  };
+  // le bandeau affiche « 9 / 45 — … » : on compare le début, pas un motif
+  const sur = i => t => t.startsWith(i + " / " + PAGES);
+  check("flèche droite", sur(9)(await presse("ArrowRight")), ou());
+  check("flèche gauche", sur(8)(await presse("ArrowLeft")), ou());
+  check("touche Fin", sur(PAGES)(await presse("End")), ou());
+  check("touche Début", sur(1)(await presse("Home")), ou());
+
+  // 6. lien profond
+  await at(6);
+  check("navigation par ancre #6", sur(6)(ou()), ou());
+
+  // 7. vignettes
+  d.getElementById("btnGrid").click(); await sleep(40);
+  check("panneau de vignettes", d.querySelectorAll("#thumbs button[data-i]").length === PAGES);
+  d.getElementById("btnGrid").click();
+
+  // 8. crédits
+  d.getElementById("btnCred").click(); await sleep(40);
+  const credRows = Array.from(d.querySelectorAll("#creditsPanel tbody tr"));
+  check("tableau des crédits complet", credRows.length === Object.keys(w.IMAGE_CREDITS).length,
+    credRows.length + " lignes");
+  check("les crédits ont tous une licence", credRows.every(tr => tr.children.length === 5));
+  d.getElementById("btnCred").click();
+
+  // 9. recherche dans l'index
+  await at(7);
+  const inp = d.getElementById("vocabSearch");
+  const cherche = async q => {
+    inp.value = q;
+    inp.dispatchEvent(new w.Event("input"));
+    await sleep(40);
+    return Array.from(d.querySelectorAll(".vocab-row.hit")).map(h => h.dataset.t);
+  };
+  check("recherche de thème", (await cherche("fête")).length === 1,
+    (await cherche("fête")).join(","));
+  check("recherche élargie", (await cherche("e")).length > 1, d.getElementById("vocabCount").textContent);
+  await cherche("");
+
+  // 10. l'index mène à la bonne page
+  //     C'est le contrôle le plus important : chaque thème doit arriver sur
+  //     la page qui porte son numéro, pas sur la page suivante.
+  let fauxCible = [];
+  d.querySelectorAll(".vocab-row.linked").forEach(row => {
+    const p = +row.querySelector(".p").textContent;
+    row.click();
+    const affichée = +d.getElementById("where").textContent.split("/")[0].trim();
+    const attendue = w.BOOK.pageMap[p] + 1;
+    if (affichée !== attendue) fauxCible.push(row.dataset.t + " p" + p +
+      " → " + affichée + " au lieu de " + attendue);
+  });
+  check("l'index mène à la bonne page", fauxCible.length === 0,
+    fauxCible.slice(0, 4).join(" | ") || "tous les liens sont justes");
+
+  // 11. pas de débordement horizontal
+  let over = [];
+  for (const width of [360, 768, 1280]) {
+    f.width = width;
+    await sleep(80);
+    for (const p of [1, 6, 8, 11, 15, 20, 25, 26, 30, 35, 40, 45]) {
+      await at(p);
+      const o = d.documentElement.scrollWidth - d.documentElement.clientWidth;
+      if (o > 0) over.push(width + "px/p" + p + " (+" + o + ")");
+    }
+  }
+  check("aucun débordement horizontal", over.length === 0, over.join(" ") || "aucun");
+  f.width = 1100; await sleep(80);
+
+  // 12. le schéma du corps
+  await at(12);
+  const legend = d.querySelectorAll(".corps-list button").length;
+  check("légende du corps complète", legend === 24, legend);
+  const firstBtn = d.querySelector(".corps-list button");
+  if (firstBtn) {
+    firstBtn.click();
+    await sleep(40);
+    check("la légende met en valeur le schéma",
+      d.querySelectorAll(".point.hot").length === 1);
+  } else {
+    check("la légende met en valeur le schéma", false, "pas de bouton");
+  }
+
+  // 13. les contraires
+  await at(17);
+  const ct = d.querySelectorAll(".ct").length;
+  check("quinze paires de contraires", ct === 15, ct);
+
+  // 14. les familles d'avatars
+  await at(11);
+  check("onze avatars de la famille",
+    d.querySelectorAll(".vcard svg.face").length === 11,
+    d.querySelectorAll(".vcard svg.face").length);
+
+  // 15. les sentiments sont tous des visages distincts
+  await at(24);
+  const moods = new Set(Array.from(d.querySelectorAll(".vcard svg.face"))
+    .map(s => s.innerHTML));
+  check("seize sentiments différents", moods.size === 16, moods.size);
+
+  // ---- les vingt pages ajoutées (livre 20-39, lecteur 26-45) --------------
+  f.width = 1100;
+  await at(29);                       // L'école / les actions à l'école
+  check("25 actions à l'école dessinées",
+    d.querySelectorAll(".vcard svg.art-vet").length === 25,
+    d.querySelectorAll(".vcard svg.art-vet").length);
+
+  await at(31);                       // Le personnel de l'école + les matières
+  check("huit membres du personnel et huit matières",
+    d.querySelectorAll(".vcard svg.art-vet").length === 16,
+    d.querySelectorAll(".vcard svg.art-vet").length);
+
+  await at(36);                       // Les métiers
+  check("vingt métiers dessinés", d.querySelectorAll(".vcard svg.art-vet").length === 20,
+    d.querySelectorAll(".vcard svg.art-vet").length);
+  const sansOutil = Array.from(d.querySelectorAll(".vcard svg.art-vet"))
+    .filter(s => s.children.length < 4).length;
+  check("chaque métier montre bien son outil", sansOutil === 0, sansOutil + " trop nus");
+
+  await at(42);                       // Mots de position et de mouvement
+  check("quatorze mots de position et huit de mouvement",
+    d.querySelectorAll(".vcard svg.art-vet").length === 22,
+    d.querySelectorAll(".vcard svg.art-vet").length);
+
+  await at(45);                       // Le temps
+  const temps = d.querySelectorAll(".vcard svg.art-vet").length;
+  check("quatorze dessins pour les moments et les jours", temps === 14, temps);
+
+  // 16. la boîte de dialogue accepte trois répliques
+  await at(35);
+  const bub = d.querySelectorAll(".boite-inner .bub").length;
+  check("trois répliques dans la boîte de dialogue", bub === 3, bub);
+  const colonnes = new Set(Array.from(d.querySelectorAll(".boite-inner .bub"))
+    .map(b => getComputedStyle(b).gridColumnStart));
+  check("les bulles alternent gauche / droite", colonnes.size === 2,
+    Array.from(colonnes).join(" / "));
+
+  // 17. aucune fiche sans illustration
+  //     Quand une photo manque, `vocabCard` affiche l'identifiant à la place du
+  //     libellé — le lecteur est alors grammaticalement faux. On repère ces
+  //     fiches à leur classe, pas à leur texte : « associer » est à la fois un
+  //     identifiant et un mot français parfaitement correct.
+  const manquant = [];
+  for (const p of [26, 27, 28, 30, 32, 33, 34, 37, 38, 39, 40, 41, 43, 44, 45]) {
+    await at(p);
+    const c = d.querySelectorAll(".vcard.is-missing");
+    if (c.length) {
+      manquant.push("p" + p + ":" + Array.from(c)
+        .map(x => x.querySelector(".vcap").textContent.trim()).join(","));
+    }
+  }
+  check("aucune fiche sans illustration", manquant.length === 0,
+    manquant.slice(0, 4).join(" | ") || "aucune");
+
+  // 18. les images se décodent réellement
+  //     Le DOM peut contenir un <img> dont le fichier est introuvable ou
+  //     corrompu : rien ne le Dit. On vérifie donc que le navigateur a bien
+  //     chargé et décodé chaque photo — ce qu'aucune capture d'Edge en mode
+  //     headless ne permet de voir, puisqu'elle ne fait pas défiler la page.
+  const cassees = [];
+  for (const p of [26, 28, 30, 33, 36, 38, 41, 44, 45]) {
+    await at(p);
+    const imgs = Array.from(d.querySelectorAll(".vcard img"));
+    await Promise.all(imgs.map(img =>
+      (img.complete ? Promise.resolve() : new Promise(r => {
+        img.addEventListener("load", r, { once: true });
+        img.addEventListener("error", r, { once: true });
+      })).then(() => {
+        if (!img.naturalWidth) cassees.push("p" + p + ":" + (img.src || "?").split("/").pop());
+      })));
+  }
+  check("toutes les photos se chargent et se décodent", cassees.length === 0,
+    cassees.slice(0, 5).join(" ") || "aucune en échec");
+
+  const s = document.getElementById("summary");
+  s.textContent = ok === total ? "RÉSULTAT : " + ok + "/" + total + " — tout est bon"
+                               : "RÉSULTAT : " + ok + "/" + total + " — " + (total - ok) + " échec(s)";
+  s.className = ok === total ? "ok" : "ko";
+  // le tableau des résultats doit suffire : on retire l'iframe de démonstration
+  f.style.display = "none";
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Le français en images — les 10 premières pages</title>
+<meta name="description" content="Les dix premières pages de « Le français en images » de Jean‑François Brochet, remises en page pour le web avec des illustrations nettes et récentes.">
+<link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Le français en images</h1>
+  <span class="pill">Jean‑François Brochet · Les Éditions CEC</span>
+  <span class="spacer"></span>
+  <button class="btn" id="btnGrid" aria-pressed="false" title="Vignettes (touche G)">Vignettes</button>
+  <button class="btn" id="btnCred" aria-pressed="false" title="Crédits des images (touche C)">Crédits images</button>
+</header>
+
+<div class="progress"><i id="progressBar"></i></div>
+
+<main class="stage" id="stage"></main>
+
+<footer class="navbar">
+  <button class="nav-btn" id="btnPrev" title="Page précédente (←)">‹ Précédente</button>
+  <span class="where" id="where"></span>
+  <span class="spacer"></span>
+  <span class="pill">← → pour naviguer</span>
+  <button class="nav-btn" id="btnNext" title="Page suivante (→)">Suivante ›</button>
+</footer>
+
+<!-- Vignettes -->
+<div class="thumbs" id="thumbs">
+  <h3>Les dix premières pages</h3>
+  <div class="grid"></div>
+  <div style="text-align:center;margin-top:18px">
+    <button class="btn close-panel">Fermer</button>
+  </div>
+</div>
+
+<!-- Crédits des images -->
+<div class="credits-panel" id="creditsPanel">
+  <div class="inner">
+    <h3>Crédits des illustrations</h3>
+    <p class="lead">
+      Les photographies proviennent de <strong>Wikimedia Commons</strong> et sont
+      réutilisables sous licence libre. Les dessins (mascottes, pièces, billets) sont
+      des créations vectorielles originales : ils restent nets à toute taille, ce
+      que ne permettait pas le balayage original de 1200 × 1500 px.
+    </p>
+    <div class="tablewrap"></div>
+    <div style="text-align:center">
+      <button class="btn close-panel">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Visionneuse -->
+<div class="lightbox" id="lightbox">
+  <figure></figure>
+</div>
+
+<script src="assets/js/images.js"></script>
+<script src="assets/js/data.js"></script>
+<script src="assets/js/art.js"></script>
+<script src="assets/js/art2.js"></script>
+<script src="assets/js/art3.js"></script>
+<script src="assets/js/art4.js"></script>
+<script src="assets/js/art5.js"></script>
+<script src="assets/js/art6.js"></script>
+<script src="assets/js/art7.js"></script>
+<script src="assets/js/art8.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

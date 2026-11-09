@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Revue des images</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<style>
+  body { overflow: auto; display: block; background: #fff; }
+  .stage { display: block; padding: 16px; }
+  .sheet { width: 100%; box-shadow: none; }
+  /* pas de lazy-loading ici : on veut voir les 52 vignettes d'un coup */
+  .card img { aspect-ratio: 1; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="sheet">
+    <h2 class="banner">Planche de revue — les 52 mots de l’alphabet</h2>
+    <div class="pad">
+      <div class="foodgrid" id="grid" style="grid-template-columns:repeat(6,1fr)"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../assets/js/images.js"></script>
+<script src="../assets/js/data.js"></script>
+<script>
+  (function () {
+    var C = window.IMAGE_CREDITS, B = window.BOOK;
+    var html = "";
+    B.alphabet.forEach(function (g) {
+      g.items.forEach(function (id) {
+        var e = C[id];
+        if (!e) { html += '<figure class="card"><figcaption class="cap">MANQUE ' + id + "</figcaption></figure>"; return; }
+        html += '<figure class="card">' +
+          '<img src="../' + e.file + '" alt="' + e.label + '">' +
+          '<figcaption class="cap">' + e.label + " · " + g.letter + "</figcaption></figure>";
+      });
+    });
+    document.getElementById("grid").innerHTML = html;
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+
+# Source scannée : 23 Mo, à récupérer si besoin
+/francais_en_images.pdf
+
+# Sorties des outils de développement
+/tools/.cache/
+/tools/shots/
+/tools/sheets/*.png
+/tools/contact-sheet.jpg
+
+# journal de debogage
+fetch*.log
+fetch*.err
+serve.log
+serve.err
