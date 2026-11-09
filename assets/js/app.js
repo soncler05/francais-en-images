@@ -53,6 +53,20 @@
     return e;
   }
 
+  /** Photo d'une fiche si le mot en a une, sinon null.
+      Les sections « dessin », « avatar », « sentiment », « santé »,
+      « action-ecole », « personnel », « metier » et « lieu-ecole » sont
+      mixtes : une photo quand Commons en fournit une, le dessin SVG sinon. */
+  function photoFor(key) {
+    var e = img(key);
+    if (!e) return null;
+    return {
+      label: e.label,
+      media: '<img src="' + esc(e.file) + '" alt="' + esc(e.label) +
+        '" ' + loadAttr() + 'loading decoding="async">'
+    };
+  }
+
   /** <figure> image + crédit, pour la planche foods. */
   function photo(id, caption) {
     var e = img(id);
@@ -341,6 +355,13 @@
       var e = img(key);
       return e ? e.label : key;
     }
+    // Genres mixtes : la photo, quand elle existe, donne le libellé.
+    if (kind === "dessin" || kind === "avatar" || kind === "sentiment" ||
+        kind === "sante" || kind === "action-ecole" || kind === "personnel" ||
+        kind === "metier" || kind === "lieu-ecole") {
+      var pe = img(key);
+      if (pe) return pe.label;
+    }
     if (kind === "dessin") return ART5.nom(key);
     if (kind === "avatar") return ART4.FAMILLE[key].label;
     if (kind === "sentiment") return ART4.SENTIMENTS[key].label;
@@ -385,7 +406,10 @@
 
     // Certaines sections mêlent photos et dessins : une scène sans photo
     // exploitable sur Commons est dessinée même au milieu d'une série de photos.
-    if (ART6.cles.indexOf(key) !== -1) {
+    // Sept scènes ART6 ont désormais une photo (lave-linge, nettoie-plancher,
+    // tond-gazon, balaie-plancher, plie-linge, reveille, habille) : le dessin
+    // ne sert plus que pour les trois restantes.
+    if (ART6.cles.indexOf(key) !== -1 && !img(key)) {
       return '<figure class="vcard is-svg">' + ART6.a(key) +
         '<figcaption class="vcap">' + esc(labelFor(kind, key)) +
         "</figcaption></figure>";
@@ -402,11 +426,13 @@
         '" + loadAttr() + "loading decoding="async">';
       zoomable = true;
     } else if (kind === "avatar") {
-      label = ART4.FAMILLE[key].label;
-      media = ART4.avatar(key);
+      var phAv = photoFor(key);
+      if (phAv) { label = phAv.label; media = phAv.media; zoomable = true; }
+      else { label = ART4.FAMILLE[key].label; media = ART4.avatar(key); }
     } else if (kind === "sentiment") {
-      label = ART4.SENTIMENTS[key].label;
-      media = ART4.sentiment(key);
+      var phSe = photoFor(key);
+      if (phSe) { label = phSe.label; media = phSe.media; zoomable = true; }
+      else { label = ART4.SENTIMENTS[key].label; media = ART4.sentiment(key); }
     } else if (kind === "forme") {
       label = ART3.FORMES[key].nom;
       media = ART3.forme(key);
@@ -425,23 +451,28 @@
       label = ART3.MOTIF_NOM[key];
       media = ART3.motif(key);
     } else if (kind === "dessin") {
-      label = ART5.nom(key);
-      media = ART5.dessin(key);
+      var phDe = photoFor(key);
+      if (phDe) { label = phDe.label; media = phDe.media; zoomable = true; }
+      else { label = ART5.nom(key); media = ART5.dessin(key); }
     } else if (kind === "action-ecole") {
-      label = ART7.actionNom(key);
-      media = ART7.action(key);
+      var phAc = photoFor(key);
+      if (phAc) { label = phAc.label; media = phAc.media; zoomable = true; }
+      else { label = ART7.actionNom(key); media = ART7.action(key); }
     } else if (kind === "personnel") {
-      label = ART7.personnelNom(key);
-      media = ART7.personnel(key);
+      var phPe = photoFor(key);
+      if (phPe) { label = phPe.label; media = phPe.media; zoomable = true; }
+      else { label = ART7.personnelNom(key); media = ART7.personnel(key); }
     } else if (kind === "matiere") {
       label = ART7.matiereNom(key);
       media = ART7.matiere(key);
     } else if (kind === "lieu-ecole") {
-      label = ART7.lieuNom(key);
-      media = ART7.lieu(key);
+      var phLi = photoFor(key);
+      if (phLi) { label = phLi.label; media = phLi.media; zoomable = true; }
+      else { label = ART7.lieuNom(key); media = ART7.lieu(key); }
     } else if (kind === "metier") {
-      label = ART8.metierNom(key);
-      media = ART8.metier(key);
+      var phMe = photoFor(key);
+      if (phMe) { label = phMe.label; media = phMe.media; zoomable = true; }
+      else { label = ART8.metierNom(key); media = ART8.metier(key); }
     } else if (kind === "position" || kind === "mouvement") {
       label = labelFor(kind, key);
       media = kind === "position" ? ART8.position(key) : ART8.mouvement(key);
@@ -452,8 +483,9 @@
       label = ART8.jourNom(key);
       media = ART8.jour(key);
     } else if (kind === "sante") {
-      label = SANTE_NOM[key] || key;
-      media = ART4.sante(key);
+      var phSa = photoFor(key);
+      if (phSa) { label = phSa.label; media = phSa.media; zoomable = true; }
+      else { label = SANTE_NOM[key] || key; media = ART4.sante(key); }
     }
 
     return '<figure class="vcard' + (opts.cls ? " " + opts.cls : "") + '"' +
