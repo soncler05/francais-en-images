@@ -243,6 +243,42 @@ fait pas défiler la page — ne dessine que la première rangée.
 | épingles à la main | 249 |
 | licences | CC BY / CC BY-SA / CC0 / domaine public — aucune photo sous licence incompatible |
 
+## Retours en mode dev
+
+Pour signaler une image qui ne montre pas clairement son mot, sans toucher
+au code :
+
+1. Activer le mode dev : ouvrir le lecteur avec `?dev=1`, ou cliquer sur le
+   bouton **Dev** dans la barre supérieure (le choix est gardé d'une visite à
+   l'autre).
+2. En mode dev, chaque fiche photo porte un bouton **Signaler** ; dans la
+   visionneuse, le pied de l'image propose une zone de commentaire et un
+   bouton **Enregistrer**. Les fiches signalées portent un badge « Signalée ».
+3. Les retours sont gardés dans le stockage local du navigateur — le site est
+   statique et ne peut pas écrire de fichier tout seul.
+4. Le bouton **Retours (n)** ouvre le panneau des retours : liste des images
+   signalées (mot, page, commentaire, date), suppression par entrée,
+   **Exporter feedback.json** (télécharge le fichier) ou **Copier le JSON**,
+   et **Tout effacer**.
+
+Format de `tools/feedback.json` :
+
+```json
+{"version": 1, "exportedAt": "2026-11-10T12:00:00.000Z", "entries": [
+  {"key": "robe", "label": "une robe", "page": 12,
+   "pageLabel": "Les vêtements", "file": "assets/img/robe.jpg",
+   "comment": "On voit un manteau, pas une robe.",
+   "createdAt": "2026-11-10T12:00:00.000Z", "updatedAt": "2026-11-10T12:00:00.000Z"}
+]}
+```
+
+Pour traiter un retour (agent ou humain) : lire `tools/feedback.json`,
+remplacer l'image signalée par une meilleure photo de Wikimedia Commons,
+mettre à jour `assets/js/images.json` puis régénérer `assets/js/images.js`
+avec `python3 tools/build_images_js.py`, vérifier avec
+`python3 tools/check_pages.py` et `python3 tools/check_assets.py`, retirer
+l'entrée de `tools/feedback.json` et commiter le tout.
+
 ## Limites
 
 * Les pages 40 à 86 ne sont pas reprises ; l'index va jusqu'à la page 42, dont
