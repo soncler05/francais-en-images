@@ -21,11 +21,13 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from lexique import ALPHABET, ALIMENTS, PICK
 from lexique2 import all_lists as lists2, CATEGORIES, PICK2
 from lexique3 import all_lists as lists3, PICK3
+from lexique4 import PICK4
 from lexique import PICK as PICK1
 
 PICK = dict(PICK1)
 PICK.update(PICK2)
 PICK.update(PICK3)
+PICK.update(PICK4)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMG_DIR = os.path.join(ROOT, "assets", "img")

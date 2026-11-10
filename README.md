@@ -39,6 +39,14 @@ Le fac-similé est un balayage de 2015 : **86 pages, une image par page, aucune
 couche de texte, 1200 × 1500 px**. Tout a donc été retranscrit à la main, et les
 illustrations ont été remplacées.
 
+Depuis, 147 cartes concrètes dessinées en SVG sont devenues des photographies
+Wikimedia Commons, revues à l'œil une par une : vêtements, accessoires et
+chaussures, métiers, lieux et personnel de l'école, actions à l'école, famille,
+sentiments, santé et tâches. Les 19 cartes sans photo claire (un sous-vêtement,
+14 gestes et 4 sentiments ou symptômes) restent en dessin, comme les schémas
+abstraits — couleurs, formes, motifs, coiffures, contraires, position,
+mouvement, temps, jours, corps, argent et mascottes.
+
 Le décor change deux fois :
 
 | Pages | Décor | Sections |
@@ -231,8 +239,8 @@ fait pas défiler la page — ne dessine que la première rangée.
 |---|---|
 | pages du lecteur | 45 |
 | mots illustrés | 393 sur les 20 nouvelles pages (281 photos, 112 dessins) |
-| photographies | 444, toutes libres, 60 Mo |
-| épingles à la main | 102 |
+| photographies | 591, toutes libres, 77 Mo |
+| épingles à la main | 249 |
 | licences | CC BY / CC BY-SA / CC0 / domaine public — aucune photo sous licence incompatible |
 
 ## Limites
