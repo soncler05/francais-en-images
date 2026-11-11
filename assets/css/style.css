@@ -400,6 +400,11 @@ body {
   background: #fff;
 }
 .foodgrid figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
   text-align: center;
   font: 600 13px var(--font);
   color: var(--green-deep);
@@ -522,6 +527,11 @@ body {
 .art-nail { width: 78%; max-width: 200px; display: block; }
 .card .cap {
   padding: 7px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
   text-align: center;
   font: 600 15.5px var(--font);
   color: var(--ink);
@@ -769,8 +779,11 @@ body {
   color: var(--ink);
   border-top: 2px solid var(--green);
   min-height: 34px;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .vcard.is-missing { border-style: dashed; border-color: #c9a; }
@@ -946,7 +959,7 @@ body {
 .lightbox img {
   max-width: 100%;
   max-height: 76vh;
-  border-radius: 12px;
+  border-radius: 12px 12px 0 0;
   background: #fff;
   display: block;
 }
@@ -954,6 +967,144 @@ body {
 .lightbox .cap { font: 700 22px var(--font-title); margin-bottom: 6px; }
 .lightbox .meta { font-size: 13px; color: #cfc9bf; line-height: 1.6; }
 .lightbox .meta a { color: var(--yellow); }
+
+/* Pied de visionneuse : une carte sombre unifiée à l'image. */
+.lightbox figcaption.lb-foot {
+  background: #241a08;
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-top: 3px solid var(--yellow);
+  border-radius: 0 0 12px 12px;
+  padding: 14px 18px 16px;
+  text-align: left;
+}
+.lb-row { display: flex; align-items: center; gap: 10px; }
+.lb-row .cap { flex: 1 1 auto; min-width: 0; margin-bottom: 0; text-align: left; }
+.lb-pos { flex: 0 0 auto; font: 600 13px var(--font); color: #cfc9bf; white-space: nowrap; }
+.lb-foot .meta { margin-top: 6px; }
+.lb-foot .say:hover, .lb-foot .say:focus-visible { background: rgba(255, 255, 255, .16); }
+
+.lb-prev, .lb-next, .lb-close {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, .4);
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 2;
+}
+.lb-prev, .lb-next {
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px; height: 48px;
+  font: 700 28px/1 var(--font);
+}
+.lb-prev { left: 14px; }
+.lb-next { right: 14px; }
+.lb-close {
+  top: 14px; right: 14px;
+  width: 40px; height: 40px;
+  font: 700 22px/1 var(--font);
+}
+.lb-prev:hover, .lb-next:hover, .lb-close:hover { background: rgba(255, 255, 255, .3); }
+
+/* ---------- Prononciation ---------- */
+.say {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px; height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  color: inherit;
+  opacity: .75;
+  cursor: pointer;
+}
+.say:hover, .say:focus-visible { opacity: 1; background: rgba(0, 0, 0, .06); }
+.say:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+.say svg { display: block; }
+html.no-speech .say { display: none; }
+
+/* ---------- Mode dev : signalement ---------- */
+#btnFeedback { display: none; }
+body.dev #btnFeedback { display: inline-block; }
+
+.flag-btn {
+  display: none;
+  flex: 0 0 auto;
+  font: 600 11.5px var(--font);
+  color: #8e2f2f;
+  background: #fdf1ec;
+  border: 1px solid #d8a49a;
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+body.dev .flag-btn { display: inline-flex; }
+.flag-badge {
+  display: none;
+  flex: 0 0 auto;
+  font: 700 11px var(--font);
+  color: #fff;
+  background: #d94b2b;
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+body.dev .flagged .flag-badge { display: inline-block; }
+
+/* Section « Signaler » du pied de visionneuse */
+.fb { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255, 255, 255, .22); }
+.fb h4 { margin: 0 0 6px; font: 700 15px var(--font-title); color: var(--yellow); }
+.fb p { margin: 0 0 10px; font-size: 13px; line-height: 1.55; color: #e8e2d6; }
+.fb label { display: block; font: 600 13px var(--font); margin-bottom: 5px; }
+.fb textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: 400 14px/1.5 var(--font);
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  background: #fff;
+  resize: vertical;
+}
+.fb-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+/* Panneau des retours (mode dev) */
+.dev-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 12, 2, .78);
+  display: none;
+  z-index: 50;
+  overflow: auto;
+  padding: 40px 24px;
+}
+.dev-panel.open { display: block; }
+.dev-panel .inner {
+  max-width: 860px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 24px 28px 28px;
+}
+.dev-panel h3 { margin: 0 0 6px; font: 700 24px var(--font-title); color: var(--green-deep); }
+.dev-panel .lead { margin: 0 0 18px; font-size: 14.5px; color: #55554e; line-height: 1.6; }
+.dev-entry { border: 1px solid #e4ead9; border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+.dev-entry-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.dev-entry-head b { font-size: 15px; }
+.dev-key { font-family: monospace; background: #f2f2ea; padding: 1px 7px; border-radius: 5px; }
+.dev-page, .dev-date { color: #6a6a62; }
+.dev-del { margin-left: auto; padding: 4px 10px; font-size: 12px; }
+.dev-entry p { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
+.dev-empty { color: #6a6a62; font-size: 14.5px; }
+.dev-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
+.dev-actions .btn { background: var(--green); border-color: var(--green-deep); color: #fff; }
+.dev-actions .btn:hover { background: var(--green-deep); }
 
 /* ---------- Barre de navigation ---------- */
 .navbar {

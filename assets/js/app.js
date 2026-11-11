@@ -16,6 +16,13 @@
   var btnNext = document.getElementById("btnNext");
   var btnGrid = document.getElementById("btnGrid");
   var btnCred = document.getElementById("btnCred");
+  var btnDev = document.getElementById("btnDev");
+  var btnFeedback = document.getElementById("btnFeedback");
+  var devPanel = document.getElementById("devPanel");
+  var devList = document.getElementById("devList");
+  var btnExport = document.getElementById("btnExport");
+  var btnCopyJson = document.getElementById("btnCopyJson");
+  var btnClearFeedback = document.getElementById("btnClearFeedback");
   var thumbs = document.getElementById("thumbs");
   var creditsPanel = document.getElementById("creditsPanel");
   var lightbox = document.getElementById("lightbox");
@@ -34,6 +41,109 @@
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  /* ------------------------------------------------------------ prononciation */
+  /* Web Speech API uniquement : aucune piste audio, aucun fichier à
+     télécharger — ça marche depuis file:// comme depuis GitHub Pages. */
+  var SPEECH_OK = ("speechSynthesis" in window);
+  if (!SPEECH_OK) document.documentElement.classList.add("no-speech");
+
+  var SAY_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' +
+    '<path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>';
+
+  function sayBtn(label) {
+    return '<button class="say" type="button" data-say="' + esc(label) +
+      '" aria-label="Écouter la prononciation" title="Écouter">' + SAY_ICON + "</button>";
+  }
+
+  function speak(text) {
+    if (!SPEECH_OK || !text) return;
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = "fr-FR";
+      u.rate = 0.85;
+      var fr = window.speechSynthesis.getVoices().filter(function (v) {
+        return v.lang && v.lang.toLowerCase().indexOf("fr") === 0;
+      });
+      if (fr.length) u.voice = fr[0];
+      window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+
+  /* ------------------------------------------------- mode dev : retours */
+  /* Le site est statique : le navigateur ne peut pas écrire de fichier.
+     Les retours vivent dans le stockage local pendant la relecture, puis
+     s'exportent en feedback.json, à commiter dans tools/feedback.json. */
+  var FB_KEY = "fie-feedback-v1";
+  var DEV_KEY = "fie-dev";
+  var devMode = false;
+  try {
+    devMode = localStorage.getItem(DEV_KEY) === "1" ||
+      /[?&]dev=1/.test(location.search);
+    if (/[?&]dev=1/.test(location.search)) localStorage.setItem(DEV_KEY, "1");
+    if (/[?&]dev=0/.test(location.search)) {
+      devMode = false;
+      localStorage.removeItem(DEV_KEY);
+    }
+  } catch (e) {}
+  if (devMode) document.body.classList.add("dev");
+
+  function loadFeedback() {
+    try {
+      var raw = localStorage.getItem(FB_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveFeedback(list) {
+    try { localStorage.setItem(FB_KEY, JSON.stringify(list)); } catch (e) {}
+  }
+  function feedbackFor(key) {
+    var list = loadFeedback();
+    for (var i = 0; i < list.length; i++) if (list[i].key === key) return list[i];
+    return null;
+  }
+  function upsertFeedback(entry) {
+    var list = loadFeedback();
+    var found = false;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].key === entry.key) {
+        entry.createdAt = list[i].createdAt; // on garde la date d'origine
+        list[i] = entry; found = true; break;
+      }
+    }
+    if (!found) list.push(entry);
+    saveFeedback(list);
+    refreshDevUI();
+  }
+  function removeFeedback(key) {
+    saveFeedback(loadFeedback().filter(function (f) { return f.key !== key; }));
+    refreshDevUI();
+  }
+  function feedbackExport() {
+    return { version: 1, exportedAt: new Date().toISOString(), entries: loadFeedback() };
+  }
+  function refreshDevUI() {
+    if (btnFeedback) btnFeedback.textContent = "Retours (" + loadFeedback().length + ")";
+    refreshFlagBadges();
+    if (devPanel && devPanel.classList.contains("open")) renderDevList();
+  }
+  function refreshFlagBadges() {
+    Array.prototype.forEach.call(
+      stage.querySelectorAll(".card[data-img], .vcard[data-img]"),
+      function (c) { c.classList.toggle("flagged", !!feedbackFor(c.dataset.img)); }
+    );
+  }
+
+  /** Bouton « Signaler » d'une fiche photo (visible en mode dev seulement). */
+  function flagBtn(id) {
+    return '<button class="flag-btn" type="button" data-flag="' + esc(id) +
+      '" title="Signaler cette image">Signaler</button>';
+  }
+  function flagBadge() {
+    return '<span class="flag-badge">Signalée</span>';
   }
 
   /* Chargement paresseux, sauf demande contraire.
@@ -74,7 +184,8 @@
     return '<figure>' +
       '<img src="' + esc(e.file) + '" alt="' + esc(caption || e.label) +
       '" + loadAttr() + "loading decoding="async">' +
-      '<figcaption>' + esc(caption || e.label) + '</figcaption></figure>';
+      '<figcaption><span class="lbl">' + esc(caption || e.label) + "</span>" +
+      sayBtn(caption || e.label) + "</figcaption></figure>";
   }
 
   /* ------------------------------------------------------- page : couverture */
@@ -271,7 +382,8 @@
     if (SVG_CARDS[id]) {
       return '<figure class="card is-svg">' +
         SVG_CARDS[id]() +
-        '<figcaption class="cap">' + esc(e.label) + '</figcaption>' +
+        '<figcaption class="cap"><span class="lbl">' + esc(e.label) + "</span>" +
+        sayBtn(e.label) + "</figcaption>" +
         '</figure>';
     }
 
@@ -279,7 +391,8 @@
       'aria-label="Agrandir ' + esc(e.label) + '">' +
       '<img src="' + esc(e.file) + '" alt="' + esc(e.label) +
       '" + loadAttr() + "loading decoding="async">' +
-      '<figcaption class="cap">' + esc(e.label) + '</figcaption>' +
+      '<figcaption class="cap"><span class="lbl">' + esc(e.label) + "</span>" +
+      sayBtn(e.label) + flagBtn(id) + flagBadge() + "</figcaption>" +
       '</figure>';
   }
 
@@ -411,15 +524,16 @@
     // ne sert plus que pour les trois restantes.
     if (ART6.cles.indexOf(key) !== -1 && !img(key)) {
       return '<figure class="vcard is-svg">' + ART6.a(key) +
-        '<figcaption class="vcap">' + esc(labelFor(kind, key)) +
-        "</figcaption></figure>";
+        '<figcaption class="vcap"><span class="lbl">' + esc(labelFor(kind, key)) +
+        "</span>" + sayBtn(labelFor(kind, key)) + "</figcaption></figure>";
     }
 
     if (kind === "photo" || kind === "phrase") {
       var e = img(key);
       if (!e) {
         return '<figure class="vcard is-missing"><div class="missing">?</div>' +
-          '<figcaption class="vcap">' + esc(key) + '</figcaption></figure>';
+          '<figcaption class="vcap"><span class="lbl">' + esc(key) + "</span>" +
+          sayBtn(key) + "</figcaption></figure>";
       }
       label = e.label;
       media = '<img src="' + esc(e.file) + '" alt="' + esc(label) +
@@ -492,7 +606,8 @@
       (zoomable ? ' data-img="' + esc(key) + '" tabindex="0" role="button"' : "") +
       ' aria-label="' + esc(label) + '">' +
       '<div class="vmedia">' + media + '</div>' +
-      '<figcaption class="vcap">' + esc(label) + '</figcaption>' +
+      '<figcaption class="vcap"><span class="lbl">' + esc(label) + "</span>" +
+      sayBtn(label) + (zoomable ? flagBtn(key) + flagBadge() : "") + "</figcaption>" +
       '</figure>';
   }
 
@@ -653,6 +768,7 @@
     if (page.render === "vocab" && !page.sections) wireVocabSearch();
     wireCards();
     wireCorps();
+    refreshFlagBadges();
 
     if (push !== false) {
       try { history.replaceState(null, "", "#" + (index + 1)); } catch (e) {}
@@ -701,13 +817,36 @@
       stage.querySelectorAll(".card[data-img], .vcard[data-img]"),
       function (c) {
         function open() { showImage(c.dataset.img); }
-        c.addEventListener("click", open);
+        c.addEventListener("click", function (ev) {
+          // Un clic sur le haut-parleur ou sur « Signaler » n'ouvre pas la fiche.
+          if (ev.target.closest && ev.target.closest(".say, .flag-btn")) return;
+          open();
+        });
         c.addEventListener("keydown", function (ev) {
-          if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); open(); }
+          if (ev.target.closest && ev.target.closest(".say, .flag-btn")) return;
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault(); ev.stopPropagation(); open();
+          }
         });
       }
     );
   }
+
+  /* Clics délégués sur la scène : écouter, signaler. Le clic remonte par la
+     fiche avant d'arriver ici, mais wireCards ignore déjà les clics sur
+     .say / .flag-btn, donc la fiche ne s'ouvre pas en même temps. */
+  stage.addEventListener("click", function (ev) {
+    if (!ev.target.closest) return;
+    var say = ev.target.closest(".say");
+    if (say) { ev.stopPropagation(); speak(say.dataset.say); return; }
+    var flag = ev.target.closest(".flag-btn");
+    if (flag) {
+      ev.stopPropagation();
+      showImage(flag.dataset.flag);
+      var ta = lightbox.querySelector(".fb textarea");
+      if (ta) ta.focus();
+    }
+  });
 
   /* ---------------------------------------- schéma du corps : légende active */
   function wireCorps() {
@@ -729,26 +868,108 @@
     });
   }
 
+  /* ------------------------------------------------------------ visionneuse */
+  /* Fiches zoomables de la page courante, dans l'ordre du document :
+     les flèches naviguent entre elles, en boucle. */
+  var lbIds = [];
+  var lbIndex = -1;
+
+  function lightboxList() {
+    return Array.prototype.map.call(
+      stage.querySelectorAll(".card[data-img], .vcard[data-img]"),
+      function (c) { return c.dataset.img; }
+    );
+  }
+
   function showImage(id) {
     var e = img(id);
     if (!e) return;
-    var meta = '<div class="cap">' + esc(e.label) + '</div>' +
-      '<div class="meta">' +
-      (e.author ? esc(e.author) + ' — ' : "") +
-      esc(e.license || "") +
-      (e.page ? ' · <a href="' + esc(e.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a>' : "") +
-      (e.year ? ' · ' + e.year : "") +
-      '</div>' +
-      '<div class="meta">Fichier d’origine : ' + esc(e.originalWidth) + '×' +
-      esc(e.originalHeight) + ' px · servi en ' + esc(e.width) + '×' + esc(e.height) + ' px</div>';
+    lbIds = lightboxList();
+    lbIndex = lbIds.indexOf(id);
+    if (lbIndex === -1) { lbIds = [id]; lbIndex = 0; }
+    renderLightbox(id);
+    lightbox.classList.add("open");
+  }
+
+  function lbGo(delta) {
+    if (!lbIds.length) return;
+    lbIndex = (lbIndex + delta + lbIds.length) % lbIds.length;
+    renderLightbox(lbIds[lbIndex]);
+  }
+  function lbPrev() { lbGo(-1); }
+  function lbNext() { lbGo(1); }
+
+  /** Section « Signaler » du pied de visionneuse (mode dev seulement). */
+  function feedbackSection(key, e) {
+    var fb = feedbackFor(key);
+    return '<div class="fb">' +
+      '<h4>Signaler cette image</h4>' +
+      '<p>Si cette photo ne montre pas clairement « ' + esc(e.label) +
+      ' », expliquez ce qui ne va pas. Le retour est gardé dans ce navigateur ; ' +
+      "exportez-le ensuite depuis le panneau « Retours » pour l'ajouter au dépôt.</p>" +
+      '<label for="fbComment">Commentaire</label>' +
+      '<textarea id="fbComment" rows="3" placeholder="Ex. : on voit un X au lieu d’un Y…">' +
+      esc(fb ? fb.comment : "") + "</textarea>" +
+      '<div class="fb-actions">' +
+        '<button class="btn fb-save" type="button" data-fb-save="' + esc(key) + '">Enregistrer</button>' +
+        (fb ? '<button class="btn fb-remove" type="button" data-fb-remove="' + esc(key) + '">Retirer</button>' : "") +
+      "</div></div>";
+  }
+
+  function saveFeedbackFor(key) {
+    var e = img(key);
+    if (!e) return;
+    var ta = lightbox.querySelector("#fbComment");
+    var now = new Date().toISOString();
+    upsertFeedback({
+      key: key,
+      label: e.label,
+      page: index,
+      pageLabel: B.pages[index] ? B.pages[index].label : "",
+      file: e.file,
+      comment: ta ? ta.value.trim() : "",
+      createdAt: now,
+      updatedAt: now
+    });
+    renderLightbox(key); // le bouton « Retirer » apparaît, le badge se met à jour
+  }
+
+  function renderLightbox(id) {
+    var e = img(id);
+    if (!e) return;
+    var total = lbIds.length;
+    var pos = total ? (lbIndex + 1) + " / " + total : "";
     lightbox.querySelector("figure").innerHTML =
       '<img src="' + esc(e.file) + '" alt="' + esc(e.label) + '">' +
-      '<figcaption>' + meta + '</figcaption>';
-    lightbox.classList.add("open");
+      '<figcaption class="lb-foot">' +
+        '<div class="lb-row">' +
+          '<span class="cap">' + esc(e.label) + "</span>" +
+          sayBtn(e.label) +
+          '<span class="lb-pos">' + pos + "</span>" +
+        "</div>" +
+        '<div class="meta">' +
+          (e.author ? esc(e.author) + ' — ' : "") +
+          esc(e.license || "") +
+          (e.page ? ' · <a href="' + esc(e.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a>' : "") +
+          (e.year ? ' · ' + e.year : "") +
+        "</div>" +
+        '<div class="meta">Fichier d’origine : ' + esc(e.originalWidth) + '×' +
+        esc(e.originalHeight) + ' px · servi en ' + esc(e.width) + '×' + esc(e.height) + ' px</div>' +
+        (devMode ? feedbackSection(id, e) : "") +
+      "</figcaption>";
   }
 
   function closeLightbox() { lightbox.classList.remove("open"); }
   lightbox.addEventListener("click", function (ev) {
+    if (!ev.target.closest) return;
+    var say = ev.target.closest(".say");
+    if (say) { ev.stopPropagation(); speak(say.dataset.say); return; }
+    if (ev.target.closest(".lb-prev")) { lbPrev(); return; }
+    if (ev.target.closest(".lb-next")) { lbNext(); return; }
+    var save = ev.target.closest("[data-fb-save]");
+    if (save) { saveFeedbackFor(save.dataset.fbSave); return; }
+    var rem = ev.target.closest("[data-fb-remove]");
+    if (rem) { removeFeedback(rem.dataset.fbRemove); renderLightbox(rem.dataset.fbRemove); return; }
     if (ev.target === lightbox || ev.target.closest(".lightbox-close")) closeLightbox();
   });
 
@@ -828,6 +1049,15 @@
       btnCred.setAttribute("aria-pressed", "false");
       return;
     }
+    if (lightbox.classList.contains("open")) {
+      // Visionneuse ouverte : les flèches passent d'une fiche à l'autre
+      // de la page courante, elles ne changent plus de page.
+      if (ev.key === "ArrowRight") { ev.preventDefault(); lbNext(); return; }
+      if (ev.key === "ArrowLeft") { ev.preventDefault(); lbPrev(); return; }
+      return;
+    }
+    // Espace sur un bouton : il active le bouton, il ne change pas de page.
+    if (ev.key === " " && ev.target && ev.target.closest && ev.target.closest("button")) return;
     switch (ev.key) {
       case "ArrowRight": case "PageDown": next(); break;
       case "ArrowLeft": case "PageUp": prev(); break;
@@ -858,9 +1088,104 @@
     if (n && n - 1 !== index) show(n - 1, false);
   });
 
+  /* ------------------------------------------------------- mode dev : panneau */
+  function renderDevList() {
+    var list = loadFeedback();
+    if (!list.length) {
+      devList.innerHTML = '<p class="dev-empty">Aucun retour pour l’instant. En mode dev, ' +
+        "ouvrez une image et signalez-la, ou utilisez le bouton « Signaler » d’une fiche.</p>";
+      return;
+    }
+    devList.innerHTML = list.map(function (f) {
+      return '<div class="dev-entry">' +
+        '<div class="dev-entry-head"><b>' + esc(f.label) + '</b>' +
+        '<span class="dev-key">' + esc(f.key) + '</span>' +
+        '<span class="dev-page">' + esc(f.pageLabel || ("page " + (f.page + 1))) + '</span>' +
+        '<span class="dev-date">' + esc((f.updatedAt || "").slice(0, 10)) + '</span>' +
+        '<button class="btn dev-del" type="button" data-fb-del="' + esc(f.key) + '">Supprimer</button></div>' +
+        '<p>' + esc(f.comment || "(sans commentaire)") + '</p>' +
+        "</div>";
+    }).join("");
+  }
+
+  function setDev(on) {
+    devMode = !!on;
+    try {
+      if (devMode) localStorage.setItem(DEV_KEY, "1");
+      else localStorage.removeItem(DEV_KEY);
+    } catch (e) {}
+    document.body.classList.toggle("dev", devMode);
+    btnDev.setAttribute("aria-pressed", String(devMode));
+    if (!devMode) {
+      devPanel.classList.remove("open");
+      btnFeedback.setAttribute("aria-pressed", "false");
+    }
+    if (lightbox.classList.contains("open") && lbIds.length && lbIndex >= 0) {
+      renderLightbox(lbIds[lbIndex]); // la section « Signaler » apparaît / disparaît
+    }
+    refreshDevUI();
+  }
+
+  btnDev.addEventListener("click", function () { setDev(!devMode); });
+  btnFeedback.addEventListener("click", function () {
+    var open = !devPanel.classList.contains("open");
+    if (open) renderDevList();
+    devPanel.classList.toggle("open", open);
+    btnFeedback.setAttribute("aria-pressed", String(open));
+  });
+  devPanel.addEventListener("click", function (ev) {
+    if (ev.target === devPanel || ev.target.classList.contains("close-panel")) {
+      devPanel.classList.remove("open");
+      btnFeedback.setAttribute("aria-pressed", "false");
+      return;
+    }
+    var del = ev.target.closest ? ev.target.closest("[data-fb-del]") : null;
+    if (del) { removeFeedback(del.dataset.fbDel); renderDevList(); }
+  });
+  btnExport.addEventListener("click", function () {
+    var blob = new Blob(
+      [JSON.stringify(feedbackExport(), null, 2) + "\n"], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "feedback.json";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  });
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+  }
+  btnCopyJson.addEventListener("click", function () {
+    var text = JSON.stringify(feedbackExport(), null, 2);
+    function done() {
+      btnCopyJson.textContent = "Copié !";
+      setTimeout(function () { btnCopyJson.textContent = "Copier le JSON"; }, 1500);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+    } else { fallbackCopy(text); done(); }
+  });
+  btnClearFeedback.addEventListener("click", function () {
+    if (!loadFeedback().length) return;
+    if (window.confirm("Tout effacer ? Tous les retours enregistrés dans ce navigateur seront supprimés.")) {
+      saveFeedback([]);
+      refreshDevUI();
+      renderDevList();
+    }
+  });
+
   /* ------------------------------------------------------------------ init */
   buildThumbs();
   buildCredits();
+  btnDev.setAttribute("aria-pressed", String(devMode));
+  refreshDevUI();
   var start = parseInt(location.hash.replace("#", ""), 10);
   show(isNaN(start) ? 0 : start - 1, false);
 })();
