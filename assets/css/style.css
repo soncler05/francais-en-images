@@ -740,8 +740,17 @@ body {
   transition: transform .14s, box-shadow .14s;
 }
 .vcard[data-img] { cursor: zoom-in; }
+.vcard[data-svg], .cell[data-svg], .ct[data-svg],
+.corps-fig[data-svg], .corps-side-fig[data-svg] { cursor: zoom-in; }
+.cell[data-svg]:focus-visible, .ct[data-svg]:focus-visible,
+.corps-fig[data-svg]:focus-visible, .corps-side-fig[data-svg]:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
 .vcard[data-img]:hover,
-.vcard[data-img]:focus-visible {
+.vcard[data-img]:focus-visible,
+.vcard[data-svg]:hover,
+.vcard[data-svg]:focus-visible {
   transform: translateY(-3px);
   box-shadow: 0 10px 20px rgba(40, 70, 10, .2);
   outline: none;
@@ -955,18 +964,84 @@ body {
   padding: 24px;
 }
 .lightbox.open { display: grid; }
-.lightbox figure { margin: 0; max-width: 900px; }
-.lightbox img {
+/* Taille minimale prédéfinie, responsive : la figure fait min(92vw, 900px)
+   de large et au moins 60vh de haut sur bureau ; sur petit écran elle se
+   réduit (voir la media query en fin de fichier). L'image / le dessin tient
+   dedans (contain, sans recadrage) ; le pied fait partie de la boîte. */
+.lightbox figure {
+  margin: 0;
+  width: min(92vw, 900px);
+  min-width: min(92vw, 560px);
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+}
+/* Carte à retourner : le recto montre l'image, le verso le haut-parleur.
+   On retourne la carte en cliquant sur l'image (pas de bouton). */
+.lb-flip {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  perspective: 1200px;
+}
+.lb-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: transform .45s ease;
+}
+.lb-front { transform: rotateY(0deg); cursor: pointer; }
+.lb-back {
+  transform: rotateY(180deg);
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+  cursor: pointer;
+  align-content: center;
+  gap: 18px;
+}
+.lb-flip.flipped .lb-front { transform: rotateY(180deg); }
+.lb-flip.flipped .lb-back { transform: rotateY(0deg); }
+.lb-back-label { font: 700 26px var(--font-title); color: #241a08; text-align: center; }
+.lb-back-hint { font: 400 13px var(--font); color: #6b6257; text-align: center; }
+.lb-front img {
   max-width: 100%;
-  max-height: 76vh;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   border-radius: 12px 12px 0 0;
   background: #fff;
   display: block;
 }
+/* Dessin SVG dans la visionneuse : grand, centré, sur fond blanc comme
+   les photos ; le pied (lb-foot) reste identique. */
+.lightbox .lb-media {
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+  padding: 28px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+.lightbox .lb-media > svg {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+.lightbox .lb-media .ct-pair { display: flex; gap: 28px; }
+.lightbox .lb-media .ct-pair svg {
+  width: min(28vw, 170px);
+  height: auto;
+  max-height: 100%;
+}
 .lightbox figcaption { color: #fff; text-align: center; padding-top: 12px; }
 .lightbox .cap { font: 700 22px var(--font-title); margin-bottom: 6px; }
-.lightbox .meta { font-size: 13px; color: #cfc9bf; line-height: 1.6; }
-.lightbox .meta a { color: var(--yellow); }
 
 /* Pied de visionneuse : une carte sombre unifiée à l'image. */
 .lightbox figcaption.lb-foot {
@@ -980,7 +1055,6 @@ body {
 .lb-row { display: flex; align-items: center; gap: 10px; }
 .lb-row .cap { flex: 1 1 auto; min-width: 0; margin-bottom: 0; text-align: left; }
 .lb-pos { flex: 0 0 auto; font: 600 13px var(--font); color: #cfc9bf; white-space: nowrap; }
-.lb-foot .meta { margin-top: 6px; }
 .lb-foot .say:hover, .lb-foot .say:focus-visible { background: rgba(255, 255, 255, .16); }
 
 .lb-prev, .lb-next, .lb-close {
@@ -1027,6 +1101,10 @@ body {
 .say:hover, .say:focus-visible { opacity: 1; background: rgba(0, 0, 0, .06); }
 .say:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
 .say svg { display: block; }
+/* Haut-parleur géant du verso de la visionneuse. */
+.say-big { width: 84px; height: 84px; border-radius: 50%; border-width: 2px; opacity: 1; color: #241a08; }
+.say-big svg { width: 44px; height: 44px; }
+.say-big:hover, .say-big:focus-visible { background: rgba(36, 26, 8, .08); }
 html.no-speech .say { display: none; }
 
 /* ---------- Mode dev : signalement ---------- */
@@ -1101,6 +1179,15 @@ body.dev .flagged .flag-badge { display: inline-block; }
 .dev-page, .dev-date { color: #6a6a62; }
 .dev-del { margin-left: auto; padding: 4px 10px; font-size: 12px; }
 .dev-entry p { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; white-space: pre-wrap; }
+.dev-file {
+  font-family: monospace;
+  font-size: 12.5px;
+  color: #77776a;
+  word-break: break-all;
+}
+/* Boutons « Signaler » d'une paire de contraires : masqués hors mode dev. */
+.ct-flag { display: none; justify-content: center; gap: 6px; margin-top: 6px; }
+body.dev .ct-flag { display: flex; }
 .dev-empty { color: #6a6a62; font-size: 14.5px; }
 .dev-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
 .dev-actions .btn { background: var(--green); border-color: var(--green-deep); color: #fff; }
@@ -1201,6 +1288,12 @@ body.dev .flagged .flag-badge { display: inline-block; }
   .numtable { grid-template-columns: repeat(4, 1fr); }
   .vgrid { grid-template-columns: repeat(2, 1fr); }
   .ct-grid { grid-template-columns: repeat(2, 1fr); }
+  /* Visionneuse : plus petite taille minimale, presque plein écran. */
+  .lightbox { padding: 10px; }
+  .lightbox figure { width: 96vw; min-width: 0; min-height: 50vh; }
+  .lightbox .lb-media { padding: 12px; }
+  .lb-back-label { font-size: 20px; }
+  .lb-prev, .lb-next { width: 40px; height: 40px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -245,39 +245,51 @@ fait pas défiler la page — ne dessine que la première rangée.
 
 ## Retours en mode dev
 
-Pour signaler une image qui ne montre pas clairement son mot, sans toucher
-au code :
+Pour signaler une image — photo ou dessin SVG — qui ne montre pas
+clairement son mot, sans toucher au code :
 
-1. Activer le mode dev : ouvrir le lecteur avec `?dev=1`, ou cliquer sur le
-   bouton **Dev** dans la barre supérieure (le choix est gardé d'une visite à
-   l'autre).
-2. En mode dev, chaque fiche photo porte un bouton **Signaler** ; dans la
-   visionneuse, le pied de l'image propose une zone de commentaire et un
-   bouton **Enregistrer**. Les fiches signalées portent un badge « Signalée ».
+1. Activer le mode dev : ouvrir le lecteur avec `?mode=dev` (le choix est
+   gardé d'une visite à l'autre ; `?mode=off` le désactive). Il n'y a pas de
+   bouton Dev dans l'interface.
+2. En mode dev, chaque fiche (photo ou dessin) porte un bouton **Signaler** ;
+   dans la visionneuse, le pied de l'image propose une zone de commentaire et
+   un bouton **Enregistrer**. Les fiches signalées portent un badge « Signalée ».
 3. Les retours sont gardés dans le stockage local du navigateur — le site est
    statique et ne peut pas écrire de fichier tout seul.
 4. Le bouton **Retours (n)** ouvre le panneau des retours : liste des images
-   signalées (mot, page, commentaire, date), suppression par entrée,
-   **Exporter feedback.json** (télécharge le fichier) ou **Copier le JSON**,
-   et **Tout effacer**.
+   signalées (mot, page, fichier ou générateur SVG, commentaire, date),
+   suppression par entrée, **Exporter feedback.json** (télécharge le fichier)
+   ou **Copier le JSON**, et **Tout effacer**.
 
-Format de `tools/feedback.json` :
+Format de `tools/feedback.json` : le champ `file` vaut le chemin de la photo
+(`assets/img/robe.jpg`) ou, pour un dessin, le générateur SVG à corriger
+(`svg:ART3.forme`, `svg:ART4.corps`, …) :
 
 ```json
 {"version": 1, "exportedAt": "2026-11-10T12:00:00.000Z", "entries": [
   {"key": "robe", "label": "une robe", "page": 12,
    "pageLabel": "Les vêtements", "file": "assets/img/robe.jpg",
    "comment": "On voit un manteau, pas une robe.",
+   "createdAt": "2026-11-10T12:00:00.000Z", "updatedAt": "2026-11-10T12:00:00.000Z"},
+  {"key": "cercle", "label": "un cercle", "page": 14,
+   "pageLabel": "Les couleurs et les formes", "file": "svg:ART3.forme",
+   "comment": "La forme ressemble à un ovale.",
    "createdAt": "2026-11-10T12:00:00.000Z", "updatedAt": "2026-11-10T12:00:00.000Z"}
 ]}
 ```
 
-Pour traiter un retour (agent ou humain) : lire `tools/feedback.json`,
-remplacer l'image signalée par une meilleure photo de Wikimedia Commons,
-mettre à jour `assets/js/images.json` puis régénérer `assets/js/images.js`
-avec `python3 tools/build_images_js.py`, vérifier avec
-`python3 tools/check_pages.py` et `python3 tools/check_assets.py`, retirer
-l'entrée de `tools/feedback.json` et commiter le tout.
+Pour traiter un retour (agent ou humain) : lire `tools/feedback.json`, puis
+— photo (`file` = `assets/img/….jpg`) : remplacer l'image signalée par une
+meilleure photo de Wikimedia Commons, mettre à jour `assets/js/images.json`
+puis régénérer `assets/js/images.js` avec
+`python3 tools/build_images_js.py` ;
+— dessin (`file` = `svg:ART…`) : corriger le générateur nommé dans
+`assets/js/art*.js`, ou remplacer le dessin par une photo (ajouter l'entrée
+à `assets/js/images.json` puis régénérer `assets/js/images.js` comme
+ci-dessus ; la fiche devient une photo toute seule).
+Dans les deux cas, vérifier avec `python3 tools/check_pages.py` et
+`python3 tools/check_assets.py`, retirer l'entrée de `tools/feedback.json`
+et commiter le tout.
 
 ## Limites
 
