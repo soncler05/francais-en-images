@@ -964,15 +964,22 @@ body {
   padding: 24px;
 }
 .lightbox.open { display: grid; }
-/* Taille minimale prédéfinie, responsive : la figure fait min(92vw, 900px)
-   de large et au moins 60vh de haut sur bureau ; sur petit écran elle se
-   réduit (voir la media query en fin de fichier). L'image / le dessin tient
-   dedans (contain, sans recadrage) ; le pied fait partie de la boîte. */
+/* Taille prédéfinie, responsive : la figure fait min(92vw, 900px) de large
+   et 60vh de haut sur bureau (50vh sur petit écran, voir la media query).
+   La hauteur DOIT être définie (height, pas auto) : c'est elle qui rend
+   définies les hauteurs en % en dessous (.lb-flip, .lb-face, img
+   max-height: 100 %). Avec height: auto, ces % ne se résolvent pas et
+   l'image s'affiche à sa taille naturelle et déborde de la carte.
+   max-height garde la boîte dans la fenêtre ; overflow: hidden empêche
+   tout débordement visible. L'image / le dessin tient dedans (contain,
+   sans recadrage) ; le pied fait partie de la boîte. */
 .lightbox figure {
   margin: 0;
   width: min(92vw, 900px);
   min-width: min(92vw, 560px);
-  min-height: 60vh;
+  height: 60vh;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -983,6 +990,9 @@ body {
   min-height: 0;
   position: relative;
   perspective: 1200px;
+  /* Contient les deux faces : même si un contenu dépassait, rien ne peut
+     sortir de la carte. */
+  overflow: hidden;
 }
 .lb-face {
   position: absolute;
@@ -1290,7 +1300,7 @@ body.dev .ct-flag { display: flex; }
   .ct-grid { grid-template-columns: repeat(2, 1fr); }
   /* Visionneuse : plus petite taille minimale, presque plein écran. */
   .lightbox { padding: 10px; }
-  .lightbox figure { width: 96vw; min-width: 0; min-height: 50vh; }
+  .lightbox figure { width: 96vw; min-width: 0; height: 50vh; max-height: calc(100vh - 20px); }
   .lightbox .lb-media { padding: 12px; }
   .lb-back-label { font-size: 20px; }
   .lb-prev, .lb-next { width: 40px; height: 40px; }
