@@ -16,7 +16,6 @@
   var btnNext = document.getElementById("btnNext");
   var btnGrid = document.getElementById("btnGrid");
   var btnCred = document.getElementById("btnCred");
-  var btnDev = document.getElementById("btnDev");
   var btnFeedback = document.getElementById("btnFeedback");
   var devPanel = document.getElementById("devPanel");
   var devList = document.getElementById("devList");
@@ -52,8 +51,8 @@
   var SAY_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">' +
     '<path fill="currentColor" d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg>';
 
-  function sayBtn(label) {
-    return '<button class="say" type="button" data-say="' + esc(label) +
+  function sayBtn(label, big) {
+    return '<button class="say' + (big ? " say-big" : "") + '" type="button" data-say="' + esc(label) +
       '" aria-label="Écouter la prononciation" title="Écouter">' + SAY_ICON + "</button>";
   }
 
@@ -76,14 +75,17 @@
   /* Le site est statique : le navigateur ne peut pas écrire de fichier.
      Les retours vivent dans le stockage local pendant la relecture, puis
      s'exportent en feedback.json, à commiter dans tools/feedback.json. */
+  /* Mode dev : uniquement par paramètre d'URL (?mode=dev pour activer,
+     ?mode=off pour désactiver) — il n'y a pas de bouton Dev dans l'interface.
+     Le choix est gardé dans le stockage local d'une visite à l'autre. */
   var FB_KEY = "fie-feedback-v1";
   var DEV_KEY = "fie-dev";
   var devMode = false;
   try {
     devMode = localStorage.getItem(DEV_KEY) === "1" ||
-      /[?&]dev=1/.test(location.search);
-    if (/[?&]dev=1/.test(location.search)) localStorage.setItem(DEV_KEY, "1");
-    if (/[?&]dev=0/.test(location.search)) {
+      /[?&]mode=dev(?:&|$)/.test(location.search);
+    if (/[?&]mode=dev(?:&|$)/.test(location.search)) localStorage.setItem(DEV_KEY, "1");
+    if (/[?&]mode=off(?:&|$)/.test(location.search)) {
       devMode = false;
       localStorage.removeItem(DEV_KEY);
     }
@@ -132,15 +134,35 @@
   }
   function refreshFlagBadges() {
     Array.prototype.forEach.call(
-      stage.querySelectorAll(".card[data-img], .vcard[data-img]"),
-      function (c) { c.classList.toggle("flagged", !!feedbackFor(c.dataset.img)); }
+      stage.querySelectorAll(CARD_SEL),
+      function (c) { c.classList.toggle("flagged", !!feedbackFor(cardKey(c))); }
     );
   }
 
-  /** Bouton « Signaler » d'une fiche photo (visible en mode dev seulement). */
-  function flagBtn(id) {
-    return '<button class="flag-btn" type="button" data-flag="' + esc(id) +
-      '" title="Signaler cette image">Signaler</button>';
+  /* Fiches zoomables : photos et dessins SVG. Le sélecteur sert aussi bien
+     au branchement des clics qu'à la navigation dans la visionneuse. */
+  var CARD_SEL = ".card[data-img], .vcard[data-img], .card[data-svg], " +
+    ".vcard[data-svg], .cell[data-svg], .ct[data-svg], " +
+    ".corps-fig[data-svg], .corps-side-fig[data-svg]";
+
+  /** Identifiant d'une fiche (photo ou dessin), pour les retours. */
+  function cardKey(c) { return c.dataset.img || c.dataset.svg; }
+
+  /** Une fiche de la page courante, sous la forme comprise par la
+      visionneuse : {key, kind, svg}. */
+  function cardItem(c) {
+    if (c.dataset.img) return { key: c.dataset.img, kind: c.dataset.kind || null, svg: false };
+    if (c.dataset.svg) return { key: c.dataset.svg, kind: c.dataset.kind || null, svg: true };
+    return null;
+  }
+
+  /** Bouton « Signaler » d'une fiche (visible en mode dev seulement).
+      kind/isSvg servent à rouvrir la bonne fiche dans la visionneuse. */
+  function flagBtn(id, kind, isSvg) {
+    return '<button class="flag-btn" type="button" data-flag="' + esc(id) + '"' +
+      (kind ? ' data-kind="' + esc(kind) + '"' : "") +
+      (isSvg ? ' data-svg="1"' : "") +
+      ' title="Signaler cette image">Signaler</button>';
   }
   function flagBadge() {
     return '<span class="flag-badge">Signalée</span>';
@@ -175,6 +197,99 @@
       media: '<img src="' + esc(e.file) + '" alt="' + esc(e.label) +
         '" ' + loadAttr() + 'loading decoding="async">'
     };
+  }
+
+  /* Genres mixtes : une photo quand Commons en fournit une, le dessin SVG
+     sinon. Les autres genres sont toujours des dessins, même si le mot
+     existe aussi comme photo (ex. « orange » la couleur, « cœur » la forme). */
+  var MIXED_KINDS = ["avatar", "sentiment", "dessin", "action-ecole",
+    "personnel", "lieu-ecole", "metier", "sante"];
+
+  /* Dessin SVG d'une fiche : {label, svg, gen} ou null si la fiche est une
+     photo ou n'a pas de dessin. Une seule source : vocabCard, les autres
+     pages et la visionneuse passent par ici, elles montrent donc exactement
+     le même dessin. `gen` est le nom du générateur (ex. « ART3.forme ») :
+     c'est ce qui est enregistré dans les retours du mode dev, pour qu'un
+     agent retrouve quoi corriger. */
+  function svgFor(kind, key) {
+    var label, svg, gen;
+    if (kind === "alphabet") {
+      if (!SVG_CARDS[key]) return null;
+      var ea = img(key);
+      if (!ea) return null;
+      return { label: ea.label, svg: SVG_CARDS[key](), gen: "ART.nail" };
+    }
+    if (kind === "argent") {
+      var it = null;
+      for (var ai = 0; ai < B.argent.length; ai++) {
+        if (B.argent[ai].id === key) { it = B.argent[ai]; break; }
+      }
+      if (!it) return null;
+      return { label: it.label,
+        svg: it.kind === "coin" ? ART.coin(it) : ART.note(it),
+        gen: it.kind === "coin" ? "ART.coin" : "ART.note" };
+    }
+    if (kind === "rang") {
+      var r = null, ri = -1;
+      for (var rj = 0; rj < B.nombres.rang.length; rj++) {
+        if (B.nombres.rang[rj][0] === key) { r = B.nombres.rang[rj]; ri = rj; break; }
+      }
+      if (!r) return null;
+      return { label: r[1],
+        svg: ART.turtle({ accent: ri % 2 ? "#8cc63f" : "#7ab800", glasses: ri === 4 }),
+        gen: "ART.turtle" };
+    }
+    if (kind === "contraire") {
+      var parts = key.split("/");
+      if (parts.length !== 2) return null;
+      var a = parts[0], b = parts[1];
+      return { label: ART4.CONTRAIRE_NOM[a] + " / " + ART4.CONTRAIRE_NOM[b],
+        svg: '<div class="ct-pair">' +
+          '<div class="ct-half">' + ART4.contraireIcon(a) + "</div>" +
+          '<div class="ct-half">' + ART4.contraireIcon(b) + "</div></div>",
+        gen: "ART4.contraireIcon" };
+    }
+    if (kind === "corps") {
+      if (key === "corps") return { label: "Le corps", svg: ART4.corps(), gen: "ART4.corps" };
+      if (key === "main") return { label: "La main", svg: ART4.main(), gen: "ART4.main" };
+      return null;
+    }
+    // Scènes ART6 sans photo : le dessin ne sert plus que pour les restantes.
+    if (ART6.cles.indexOf(key) !== -1) {
+      if (img(key)) return null; // la scène a une photo
+      return { label: labelFor(kind, key), svg: ART6.a(key), gen: "ART6.a" };
+    }
+    // Genres mixtes : la photo l'emporte quand Commons en fournit une.
+    if (MIXED_KINDS.indexOf(kind) !== -1 && img(key)) return null;
+    if (kind === "avatar") { label = ART4.FAMILLE[key].label; svg = ART4.avatar(key); gen = "ART4.avatar"; }
+    else if (kind === "sentiment") { label = ART4.SENTIMENTS[key].label; svg = ART4.sentiment(key); gen = "ART4.sentiment"; }
+    else if (kind === "forme") { label = ART3.FORMES[key].nom; svg = ART3.forme(key); gen = "ART3.forme"; }
+    else if (kind === "couleur") { label = key; svg = ART3.couleurSwatch(ART3.COULEUR_HEX[key], key); gen = "ART3.couleurSwatch"; }
+    else if (kind === "cheveux-couleur") {
+      label = key;
+      svg = ART3.couleurCheveux(
+        (ART3.cheveux.filter(function (c) { return c[0] === key; })[0] || [, "#ccc"])[1], key);
+      gen = "ART3.couleurCheveux";
+    }
+    else if (kind === "coiffure") {
+      var st = ART3.stylesCheveux.filter(function (c) { return c[0] === key; })[0] || [key, key];
+      label = st[1]; svg = ART3.coiffure(key, st[1]); gen = "ART3.coiffure";
+    }
+    else if (kind === "motif") { label = ART3.MOTIF_NOM[key]; svg = ART3.motif(key); gen = "ART3.motif"; }
+    else if (kind === "dessin") { label = ART5.nom(key); svg = ART5.dessin(key); gen = "ART5.dessin"; }
+    else if (kind === "action-ecole") { label = ART7.actionNom(key); svg = ART7.action(key); gen = "ART7.action"; }
+    else if (kind === "personnel") { label = ART7.personnelNom(key); svg = ART7.personnel(key); gen = "ART7.personnel"; }
+    else if (kind === "matiere") { label = ART7.matiereNom(key); svg = ART7.matiere(key); gen = "ART7.matiere"; }
+    else if (kind === "lieu-ecole") { label = ART7.lieuNom(key); svg = ART7.lieu(key); gen = "ART7.lieu"; }
+    else if (kind === "metier") { label = ART8.metierNom(key); svg = ART8.metier(key); gen = "ART8.metier"; }
+    else if (kind === "position") { label = labelFor(kind, key); svg = ART8.position(key); gen = "ART8.position"; }
+    else if (kind === "mouvement") { label = labelFor(kind, key); svg = ART8.mouvement(key); gen = "ART8.mouvement"; }
+    else if (kind === "temps") { label = TEMPS_NOM[key] || key; svg = ART8.temps(key); gen = "ART8.temps"; }
+    else if (kind === "jour-semaine") { label = ART8.jourNom(key); svg = ART8.jour(key); gen = "ART8.jour"; }
+    else if (kind === "sante") { label = SANTE_NOM[key] || key; svg = ART4.sante(key); gen = "ART4.sante"; }
+    else return null;
+    if (!svg) return null;
+    return { label: label, svg: svg, gen: gen };
   }
 
   /** <figure> image + crédit, pour la planche foods. */
@@ -380,10 +495,12 @@
     if (!e) return "";
 
     if (SVG_CARDS[id]) {
-      return '<figure class="card is-svg">' +
-        SVG_CARDS[id]() +
+      var sv = svgFor("alphabet", id);
+      return '<figure class="card is-svg" data-svg="' + esc(id) + '" data-kind="alphabet" ' +
+        'tabindex="0" role="button" aria-label="Agrandir ' + esc(e.label) + '">' +
+        sv.svg +
         '<figcaption class="cap"><span class="lbl">' + esc(e.label) + "</span>" +
-        sayBtn(e.label) + "</figcaption>" +
+        sayBtn(e.label) + flagBtn(id, "alphabet", true) + flagBadge() + "</figcaption>" +
         '</figure>';
     }
 
@@ -392,7 +509,7 @@
       '<img src="' + esc(e.file) + '" alt="' + esc(e.label) +
       '" + loadAttr() + "loading decoding="async">' +
       '<figcaption class="cap"><span class="lbl">' + esc(e.label) + "</span>" +
-      sayBtn(e.label) + flagBtn(id) + flagBadge() + "</figcaption>" +
+      sayBtn(e.label) + flagBtn(id, null, false) + flagBadge() + "</figcaption>" +
       '</figure>';
   }
 
@@ -435,15 +552,19 @@
     }).join("");
 
     var rang = n.rang.map(function (p, i) {
-      return '<div class="cell">' +
-        ART.turtle({ accent: i % 2 ? "#8cc63f" : "#7ab800", glasses: i === 4 }) +
-        '<b>' + esc(p[1]) + '</b></div>';
+      return '<div class="cell" data-svg="' + esc(p[0]) + '" data-kind="rang" ' +
+        'tabindex="0" role="button" aria-label="Agrandir ' + esc(p[1]) + '">' +
+        svgFor("rang", p[0]).svg +
+        '<b>' + esc(p[1]) + '</b>' + flagBtn(p[0], "rang", true) + flagBadge() + '</div>';
     }).join("");
 
     var argent = B.argent.map(function (it) {
-      var svg = it.kind === "coin" ? ART.coin(it) : ART.note(it);
-      return '<div class="cell' + (it.kind === "note" ? " note-cell" : "") + '">' +
-        svg + '<b>' + esc(it.label) + '</b></div>';
+      var sv = svgFor("argent", it.id);
+      return '<div class="cell' + (it.kind === "note" ? " note-cell" : "") +
+        '" data-svg="' + esc(it.id) + '" data-kind="argent" tabindex="0" role="button" ' +
+        'aria-label="Agrandir ' + esc(it.label) + '">' +
+        sv.svg + '<b>' + esc(it.label) + '</b>' +
+        flagBtn(it.id, "argent", true) + flagBadge() + '</div>';
     }).join("");
 
     return '<div class="sheet">' +
@@ -512,10 +633,12 @@
      Pages 11 à 25 — décor « orange texturé », fiches blanches à filet vert
      ====================================================================== */
 
-  /** Une fiche : photo, ou dessin SVG selon le genre de la section. */
+  /** Une fiche : photo, ou dessin SVG selon le genre de la section. Les
+      fiches dessin sont cliquables comme les photos : elles s'ouvrent dans
+      la visionneuse (data-svg + data-kind) et se signalent en mode dev. */
   function vocabCard(kind, key, opts) {
     opts = opts || {};
-    var label = "", media = "", zoomable = false;
+    var label = "", media = "", zoomable = false, svgGen = null;
 
     // Certaines sections mêlent photos et dessins : une scène sans photo
     // exploitable sur Commons est dessinée même au milieu d'une série de photos.
@@ -523,9 +646,13 @@
     // tond-gazon, balaie-plancher, plie-linge, reveille, habille) : le dessin
     // ne sert plus que pour les trois restantes.
     if (ART6.cles.indexOf(key) !== -1 && !img(key)) {
-      return '<figure class="vcard is-svg">' + ART6.a(key) +
-        '<figcaption class="vcap"><span class="lbl">' + esc(labelFor(kind, key)) +
-        "</span>" + sayBtn(labelFor(kind, key)) + "</figcaption></figure>";
+      var sv6 = svgFor(kind, key);
+      label = sv6.label;
+      return '<figure class="vcard is-svg" data-svg="' + esc(key) +
+        '" data-kind="' + esc(kind) + '" tabindex="0" role="button" aria-label="' + esc(label) + '">' +
+        sv6.svg +
+        '<figcaption class="vcap"><span class="lbl">' + esc(label) + "</span>" +
+        sayBtn(label) + flagBtn(key, kind, true) + flagBadge() + "</figcaption></figure>";
     }
 
     if (kind === "photo" || kind === "phrase") {
@@ -539,75 +666,32 @@
       media = '<img src="' + esc(e.file) + '" alt="' + esc(label) +
         '" + loadAttr() + "loading decoding="async">';
       zoomable = true;
-    } else if (kind === "avatar") {
-      var phAv = photoFor(key);
-      if (phAv) { label = phAv.label; media = phAv.media; zoomable = true; }
-      else { label = ART4.FAMILLE[key].label; media = ART4.avatar(key); }
-    } else if (kind === "sentiment") {
-      var phSe = photoFor(key);
-      if (phSe) { label = phSe.label; media = phSe.media; zoomable = true; }
-      else { label = ART4.SENTIMENTS[key].label; media = ART4.sentiment(key); }
-    } else if (kind === "forme") {
-      label = ART3.FORMES[key].nom;
-      media = ART3.forme(key);
-    } else if (kind === "couleur") {
-      label = key;
-      media = ART3.couleurSwatch(ART3.COULEUR_HEX[key], key);
-    } else if (kind === "cheveux-couleur") {
-      label = key;
-      media = ART3.couleurCheveux(
-        (ART3.cheveux.filter(function (c) { return c[0] === key; })[0] || [, "#ccc"])[1], key);
-    } else if (kind === "coiffure") {
-      var st = ART3.stylesCheveux.filter(function (c) { return c[0] === key; })[0] || [key, key];
-      label = st[1];
-      media = ART3.coiffure(key, st[1]);
-    } else if (kind === "motif") {
-      label = ART3.MOTIF_NOM[key];
-      media = ART3.motif(key);
-    } else if (kind === "dessin") {
-      var phDe = photoFor(key);
-      if (phDe) { label = phDe.label; media = phDe.media; zoomable = true; }
-      else { label = ART5.nom(key); media = ART5.dessin(key); }
-    } else if (kind === "action-ecole") {
-      var phAc = photoFor(key);
-      if (phAc) { label = phAc.label; media = phAc.media; zoomable = true; }
-      else { label = ART7.actionNom(key); media = ART7.action(key); }
-    } else if (kind === "personnel") {
-      var phPe = photoFor(key);
-      if (phPe) { label = phPe.label; media = phPe.media; zoomable = true; }
-      else { label = ART7.personnelNom(key); media = ART7.personnel(key); }
-    } else if (kind === "matiere") {
-      label = ART7.matiereNom(key);
-      media = ART7.matiere(key);
-    } else if (kind === "lieu-ecole") {
-      var phLi = photoFor(key);
-      if (phLi) { label = phLi.label; media = phLi.media; zoomable = true; }
-      else { label = ART7.lieuNom(key); media = ART7.lieu(key); }
-    } else if (kind === "metier") {
-      var phMe = photoFor(key);
-      if (phMe) { label = phMe.label; media = phMe.media; zoomable = true; }
-      else { label = ART8.metierNom(key); media = ART8.metier(key); }
-    } else if (kind === "position" || kind === "mouvement") {
-      label = labelFor(kind, key);
-      media = kind === "position" ? ART8.position(key) : ART8.mouvement(key);
-    } else if (kind === "temps") {
-      label = TEMPS_NOM[key] || key;
-      media = ART8.temps(key);
-    } else if (kind === "jour-semaine") {
-      label = ART8.jourNom(key);
-      media = ART8.jour(key);
-    } else if (kind === "sante") {
-      var phSa = photoFor(key);
-      if (phSa) { label = phSa.label; media = phSa.media; zoomable = true; }
-      else { label = SANTE_NOM[key] || key; media = ART4.sante(key); }
+    } else {
+      // Genre mixte : photo quand Commons en fournit une, sinon le dessin.
+      // Genre dessin pur : toujours le dessin (svgFor est la seule source).
+      if (MIXED_KINDS.indexOf(kind) !== -1) {
+        var ph = photoFor(key);
+        if (ph) { label = ph.label; media = ph.media; zoomable = true; }
+      }
+      if (!zoomable) {
+        var sv = svgFor(kind, key);
+        if (sv) { label = sv.label; media = sv.svg; svgGen = sv.gen; }
+      }
     }
 
+    var openAttrs = zoomable
+      ? ' data-img="' + esc(key) + '" tabindex="0" role="button"'
+      : (svgGen
+        ? ' data-svg="' + esc(key) + '" data-kind="' + esc(kind) + '" tabindex="0" role="button"'
+        : "");
+
     return '<figure class="vcard' + (opts.cls ? " " + opts.cls : "") + '"' +
-      (zoomable ? ' data-img="' + esc(key) + '" tabindex="0" role="button"' : "") +
+      openAttrs +
       ' aria-label="' + esc(label) + '">' +
       '<div class="vmedia">' + media + '</div>' +
       '<figcaption class="vcap"><span class="lbl">' + esc(label) + "</span>" +
-      sayBtn(label) + (zoomable ? flagBtn(key) + flagBadge() : "") + "</figcaption>" +
+      sayBtn(label) + ((zoomable || svgGen) ? flagBtn(key, kind, !!svgGen) + flagBadge() : "") +
+      "</figcaption>" +
       '</figure>';
   }
 
@@ -685,14 +769,18 @@
       '<h2 class="banner">Le corps</h2>' +
       '<div class="pad">' +
         '<div class="corps-wrap">' +
-          '<div class="corps-fig">' + ART4.corps() +
-            '<figcaption>Clique sur un mot pour le situer sur le schéma.</figcaption>' +
+          '<div class="corps-fig" data-svg="corps" data-kind="corps" tabindex="0" ' +
+            'role="button" aria-label="Agrandir le corps">' + svgFor("corps", "corps").svg +
+            '<figcaption>Clique sur un mot pour le situer sur le schéma. ' +
+            flagBtn("corps", "corps", true) + flagBadge() + '</figcaption>' +
           "</div>" +
           '<div class="corps-side">' +
             "<h3>Le corps</h3>" +
             '<ul class="corps-list">' + legend + "</ul>" +
             '<h3>La main</h3>' +
-            '<div class="corps-side-fig">' + ART4.main() + "</div>" +
+            '<div class="corps-side-fig" data-svg="main" data-kind="corps" tabindex="0" ' +
+              'role="button" aria-label="Agrandir la main">' + svgFor("corps", "main").svg +
+              flagBtn("main", "corps", true) + flagBadge() + "</div>" +
             '<ul class="corps-list">' + doigts + "</ul>" +
           "</div>" +
         "</div>" +
@@ -707,13 +795,17 @@
       var a = p[0], b = p[p.length - 1];
       var milieu = null;
       var milieuHtml = '<div class="ct-half">' + ART4.contraireIcon(b) + "</div>";
-      return '<figure class="ct">' +
+      var pairKey = a + "/" + b;
+      return '<figure class="ct" data-svg="' + esc(pairKey) + '" data-kind="contraire" ' +
+        'tabindex="0" role="button" aria-label="Agrandir ' +
+        esc(ART4.CONTRAIRE_NOM[a] + " / " + ART4.CONTRAIRE_NOM[b]) + '">' +
         '<div class="ct-pair">' +
           '<div class="ct-half">' + ART4.contraireIcon(a) + "</div>" +
           (milieuHtml || '<div class="ct-half">' + ART4.contraireIcon(b) + "</div>") +
         "</div>" +
         '<div class="ct-lbls"><span>' + esc(ART4.CONTRAIRE_NOM[a]) + "</span>" +
         (milieu ? "" : "<span>" + esc(ART4.CONTRAIRE_NOM[b]) + "</span>") + "</div>" +
+        '<div class="ct-flag">' + flagBtn(pairKey, "contraire", true) + flagBadge() + "</div>" +
         "</figure>";
     }).join("");
 
@@ -810,16 +902,18 @@
     });
   }
 
-  /* ------------------------------------------------------- cartes -> lightbox */
+  /* ------------------------------------------- cartes -> lightbox (photos + SVG) */
   function wireCards() {
-    // Les deux générations de fiches : .card (alphabet) et .vcard (pages 11-25)
+    // Photos et dessins : .card (alphabet), .vcard (pages 11-25), .cell
+    // (nombres, argent), .ct (contraires), .corps-fig/.corps-side-fig (corps).
     Array.prototype.forEach.call(
-      stage.querySelectorAll(".card[data-img], .vcard[data-img]"),
+      stage.querySelectorAll(CARD_SEL),
       function (c) {
-        function open() { showImage(c.dataset.img); }
+        function open() { showCard(cardItem(c)); }
         c.addEventListener("click", function (ev) {
-          // Un clic sur le haut-parleur ou sur « Signaler » n'ouvre pas la fiche.
-          if (ev.target.closest && ev.target.closest(".say, .flag-btn")) return;
+          // Un clic sur le haut-parleur, sur « Signaler » ou sur un point
+          // du schéma du corps n'ouvre pas la fiche.
+          if (ev.target.closest && ev.target.closest(".say, .flag-btn, .point")) return;
           open();
         });
         c.addEventListener("keydown", function (ev) {
@@ -842,7 +936,8 @@
     var flag = ev.target.closest(".flag-btn");
     if (flag) {
       ev.stopPropagation();
-      showImage(flag.dataset.flag);
+      showCard({ key: flag.dataset.flag, kind: flag.dataset.kind || null,
+        svg: flag.dataset.svg === "1" });
       var ta = lightbox.querySelector(".fb textarea");
       if (ta) ta.focus();
     }
@@ -873,26 +968,31 @@
      les flèches naviguent entre elles, en boucle. */
   var lbIds = [];
   var lbIndex = -1;
+  var lbItem = null; // fiche affichée : {key, kind, svg}
+  var lbFlipped = false; // recto (image) ou verso (haut-parleur) de la fiche
 
   function lightboxList() {
     return Array.prototype.map.call(
-      stage.querySelectorAll(".card[data-img], .vcard[data-img]"),
-      function (c) { return c.dataset.img; }
-    );
+      stage.querySelectorAll(CARD_SEL), cardItem);
   }
 
-  function showImage(id) {
-    var e = img(id);
-    if (!e) return;
+  /** Ouvre la visionneuse sur une fiche (photo ou dessin SVG). */
+  function showCard(item) {
+    if (!item) return;
+    lbFlipped = false; // on repart toujours du recto
     lbIds = lightboxList();
-    lbIndex = lbIds.indexOf(id);
-    if (lbIndex === -1) { lbIds = [id]; lbIndex = 0; }
-    renderLightbox(id);
+    lbIndex = -1;
+    for (var i = 0; i < lbIds.length; i++) {
+      if (lbIds[i].key === item.key && lbIds[i].svg === item.svg) { lbIndex = i; break; }
+    }
+    if (lbIndex === -1) { lbIds = [item]; lbIndex = 0; }
+    renderLightbox(item);
     lightbox.classList.add("open");
   }
 
   function lbGo(delta) {
     if (!lbIds.length) return;
+    lbFlipped = false; // changer de fiche repart du recto
     lbIndex = (lbIndex + delta + lbIds.length) % lbIds.length;
     renderLightbox(lbIds[lbIndex]);
   }
@@ -900,76 +1000,118 @@
   function lbNext() { lbGo(1); }
 
   /** Section « Signaler » du pied de visionneuse (mode dev seulement). */
-  function feedbackSection(key, e) {
-    var fb = feedbackFor(key);
+  function feedbackSection(item, label) {
+    var fb = feedbackFor(item.key);
+    var quoi = item.svg ? "ce dessin" : "cette photo";
     return '<div class="fb">' +
-      '<h4>Signaler cette image</h4>' +
-      '<p>Si cette photo ne montre pas clairement « ' + esc(e.label) +
+      '<h4>Signaler ' + (item.svg ? "ce dessin" : "cette image") + '</h4>' +
+      '<p>Si ' + quoi + ' ne montre pas clairement « ' + esc(label) +
       ' », expliquez ce qui ne va pas. Le retour est gardé dans ce navigateur ; ' +
       "exportez-le ensuite depuis le panneau « Retours » pour l'ajouter au dépôt.</p>" +
       '<label for="fbComment">Commentaire</label>' +
       '<textarea id="fbComment" rows="3" placeholder="Ex. : on voit un X au lieu d’un Y…">' +
       esc(fb ? fb.comment : "") + "</textarea>" +
       '<div class="fb-actions">' +
-        '<button class="btn fb-save" type="button" data-fb-save="' + esc(key) + '">Enregistrer</button>' +
-        (fb ? '<button class="btn fb-remove" type="button" data-fb-remove="' + esc(key) + '">Retirer</button>' : "") +
+        '<button class="btn fb-save" type="button" data-fb-save="' + esc(item.key) + '">Enregistrer</button>' +
+        (fb ? '<button class="btn fb-remove" type="button" data-fb-remove="' + esc(item.key) + '">Retirer</button>' : "") +
       "</div></div>";
   }
 
-  function saveFeedbackFor(key) {
-    var e = img(key);
-    if (!e) return;
+  function saveFeedbackFor(item) {
+    if (!item) return;
     var ta = lightbox.querySelector("#fbComment");
     var now = new Date().toISOString();
+    var label, file;
+    if (item.svg) {
+      var sv = svgFor(item.kind, item.key);
+      if (!sv) return;
+      label = sv.label;
+      file = "svg:" + sv.gen; // ex. « svg:ART3.forme » : le générateur à corriger
+    } else {
+      var e = img(item.key);
+      if (!e) return;
+      label = e.label;
+      file = e.file;
+    }
     upsertFeedback({
-      key: key,
-      label: e.label,
+      key: item.key,
+      label: label,
       page: index,
       pageLabel: B.pages[index] ? B.pages[index].label : "",
-      file: e.file,
+      file: file,
       comment: ta ? ta.value.trim() : "",
       createdAt: now,
       updatedAt: now
     });
-    renderLightbox(key); // le bouton « Retirer » apparaît, le badge se met à jour
+    renderLightbox(item); // le bouton « Retirer » apparaît, le badge se met à jour
   }
 
-  function renderLightbox(id) {
-    var e = img(id);
-    if (!e) return;
+  /* Le pied ne montre plus les crédits visibles (auteur, licence, lien,
+     dimensions) : l'information reste dans la page, invisible, en attributs
+     data-* sur la balise <img> (photo) ou sur le panneau SVG. Les crédits
+     complets restent listés dans le panneau « Crédits images ». */
+  function renderLightbox(item) {
+    lbItem = item;
     var total = lbIds.length;
     var pos = total ? (lbIndex + 1) + " / " + total : "";
+    var label, mediaHtml;
+    if (item.svg) {
+      var sv = svgFor(item.kind, item.key);
+      if (!sv) return;
+      label = sv.label;
+      mediaHtml = '<div class="lb-media" data-kind="svg" data-generator="svg:' +
+        esc(sv.gen) + '">' + sv.svg + "</div>";
+    } else {
+      var e = img(item.key);
+      if (!e) return;
+      label = e.label;
+      mediaHtml = '<img src="' + esc(e.file) + '" alt="' + esc(e.label) + '"' +
+        ' data-author="' + esc(e.author || "") + '"' +
+        ' data-license="' + esc(e.license || "") + '"' +
+        ' data-source-url="' + esc(e.page || "") + '"' +
+        ' data-original-width="' + esc(e.originalWidth) + '"' +
+        ' data-original-height="' + esc(e.originalHeight) + '"' +
+        ' data-served-width="' + esc(e.width) + '"' +
+        ' data-served-height="' + esc(e.height) + '"' +
+        (e.year ? ' data-year="' + esc(e.year) + '"' : "") + '>';
+    }
+    /* Carte à retourner : le recto montre l'image, le verso le haut-parleur.
+       On retourne la carte en cliquant sur l'image (pas de bouton). */
     lightbox.querySelector("figure").innerHTML =
-      '<img src="' + esc(e.file) + '" alt="' + esc(e.label) + '">' +
+      '<div class="lb-flip' + (lbFlipped ? " flipped" : "") + '">' +
+        '<div class="lb-face lb-front">' + mediaHtml + "</div>" +
+        '<div class="lb-face lb-back">' +
+          '<span class="lb-back-label">' + esc(label) + "</span>" +
+          sayBtn(label, true) +
+          '<span class="lb-back-hint">Cliquer pour revoir l’image</span>' +
+        "</div>" +
+      "</div>" +
       '<figcaption class="lb-foot">' +
         '<div class="lb-row">' +
-          '<span class="cap">' + esc(e.label) + "</span>" +
-          sayBtn(e.label) +
+          '<span class="cap">' + esc(label) + "</span>" +
+          sayBtn(label) +
           '<span class="lb-pos">' + pos + "</span>" +
         "</div>" +
-        '<div class="meta">' +
-          (e.author ? esc(e.author) + ' — ' : "") +
-          esc(e.license || "") +
-          (e.page ? ' · <a href="' + esc(e.page) + '" target="_blank" rel="noopener">Wikimedia Commons</a>' : "") +
-          (e.year ? ' · ' + e.year : "") +
-        "</div>" +
-        '<div class="meta">Fichier d’origine : ' + esc(e.originalWidth) + '×' +
-        esc(e.originalHeight) + ' px · servi en ' + esc(e.width) + '×' + esc(e.height) + ' px</div>' +
-        (devMode ? feedbackSection(id, e) : "") +
+        (devMode ? feedbackSection(item, label) : "") +
       "</figcaption>";
   }
 
-  function closeLightbox() { lightbox.classList.remove("open"); }
+  function closeLightbox() {
+    lbFlipped = false;
+    lightbox.classList.remove("open");
+  }
   lightbox.addEventListener("click", function (ev) {
     if (!ev.target.closest) return;
     var say = ev.target.closest(".say");
     if (say) { ev.stopPropagation(); speak(say.dataset.say); return; }
     if (ev.target.closest(".lb-prev")) { lbPrev(); return; }
     if (ev.target.closest(".lb-next")) { lbNext(); return; }
+    var flip = ev.target.closest(".lb-flip");
+    if (flip) { lbFlipped = !lbFlipped; flip.classList.toggle("flipped", lbFlipped); return; }
     var save = ev.target.closest("[data-fb-save]");
-    if (save) { saveFeedbackFor(save.dataset.fbSave); return; }
+    if (save) { saveFeedbackFor(lbItem); return; }
     var rem = ev.target.closest("[data-fb-remove]");
-    if (rem) { removeFeedback(rem.dataset.fbRemove); renderLightbox(rem.dataset.fbRemove); return; }
+    if (rem) { removeFeedback(lbItem.key); renderLightbox(lbItem); return; }
     if (ev.target === lightbox || ev.target.closest(".lightbox-close")) closeLightbox();
   });
 
@@ -1103,30 +1245,12 @@
         '<span class="dev-page">' + esc(f.pageLabel || ("page " + (f.page + 1))) + '</span>' +
         '<span class="dev-date">' + esc((f.updatedAt || "").slice(0, 10)) + '</span>' +
         '<button class="btn dev-del" type="button" data-fb-del="' + esc(f.key) + '">Supprimer</button></div>' +
+        '<p class="dev-file">' + esc(f.file || "") + '</p>' +
         '<p>' + esc(f.comment || "(sans commentaire)") + '</p>' +
         "</div>";
     }).join("");
   }
 
-  function setDev(on) {
-    devMode = !!on;
-    try {
-      if (devMode) localStorage.setItem(DEV_KEY, "1");
-      else localStorage.removeItem(DEV_KEY);
-    } catch (e) {}
-    document.body.classList.toggle("dev", devMode);
-    btnDev.setAttribute("aria-pressed", String(devMode));
-    if (!devMode) {
-      devPanel.classList.remove("open");
-      btnFeedback.setAttribute("aria-pressed", "false");
-    }
-    if (lightbox.classList.contains("open") && lbIds.length && lbIndex >= 0) {
-      renderLightbox(lbIds[lbIndex]); // la section « Signaler » apparaît / disparaît
-    }
-    refreshDevUI();
-  }
-
-  btnDev.addEventListener("click", function () { setDev(!devMode); });
   btnFeedback.addEventListener("click", function () {
     var open = !devPanel.classList.contains("open");
     if (open) renderDevList();
@@ -1184,7 +1308,6 @@
   /* ------------------------------------------------------------------ init */
   buildThumbs();
   buildCredits();
-  btnDev.setAttribute("aria-pressed", String(devMode));
   refreshDevUI();
   var start = parseInt(location.hash.replace("#", ""), 10);
   show(isNaN(start) ? 0 : start - 1, false);
